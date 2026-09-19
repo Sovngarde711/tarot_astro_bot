@@ -203,6 +203,27 @@ check("подтверждение оплаты разбирается до пр�
       source.index('"successful_payment" in message')
       < source.index('if "text" not in message'))
 
+print("\n=== 11. Оферта ===")
+terms = B.offer_text()
+check("оферта помещается в одно сообщение", len(terms) < 4000,
+      "%d символов" % len(terms))
+check("цена в оферте совпадает с настоящей",
+      ("%d ⭐" % payments.PRICE) in terms)
+check("сказано, что это цифровая услуга", "цифровая услуга" in terms)
+check("обещан возврат неиспользованного", "Неиспользованные" in terms)
+check("указан контакт для обращений", B.SELLER_CONTACT in terms)
+check("сказано, чем разбор не является",
+      "не медицинская" in terms and "не юридическая" in terms)
+check("сбываемость не обещана", "сбываемость" in terms)
+check("сказано про удаление данных", "/reset" in terms)
+check("оферта открывается командой",
+      '"terms"' in source and "offer_text()" in source)
+
+# Обещания оферты должны совпадать с поведением бота
+check("возврат в оферте есть и в коде", "refundStarPayment" in source)
+check("оферта не обещает того, чего бот не делает: срок хранения оплат",
+      "не имеют срока" in terms and "не сгорают" in terms)
+
 print("\n=== ИТОГ ===")
 print("Не прошло проверок: %d" % len(FAILS))
 for item in FAILS:
