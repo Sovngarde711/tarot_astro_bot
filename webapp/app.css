@@ -1,0 +1,253 @@
+/* Оформление мини-приложения.
+ *
+ * Цвета берём из темы Telegram (--tg-theme-*): приложение должно выглядеть
+ * родным и в светлой, и в тёмной теме, а не спорить с клиентом. Если
+ * переменных нет (открыли в обычном браузере), подставляются запасные —
+ * тёмная ночная гамма под астрологию.
+ */
+
+:root {
+  --bg: var(--tg-theme-bg-color, #0e1020);
+  --surface: var(--tg-theme-secondary-bg-color, #171a2e);
+  --text: var(--tg-theme-text-color, #eef0ff);
+  --muted: var(--tg-theme-hint-color, #8d93b5);
+  --accent: var(--tg-theme-button-color, #7c6cf0);
+  --accent-text: var(--tg-theme-button-text-color, #ffffff);
+  --link: var(--tg-theme-link-color, #8fb4ff);
+
+  --radius: 16px;
+  --radius-lg: 22px;
+  --gap: 12px;
+  --shadow: 0 8px 24px rgba(0, 0, 0, .18);
+}
+
+* { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+
+body {
+  margin: 0;
+  padding: 0 16px calc(24px + env(safe-area-inset-bottom));
+  background: var(--bg);
+  color: var(--text);
+  font: 16px/1.5 -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI",
+        system-ui, Roboto, sans-serif;
+  overflow-x: hidden;
+}
+
+/* Звёздная пыль на фоне — рисуется скриптом, чтобы не тащить картинку */
+.stars {
+  position: fixed; inset: 0; pointer-events: none; z-index: 0;
+  opacity: .5;
+}
+.stars i {
+  position: absolute; width: 2px; height: 2px; border-radius: 50%;
+  background: var(--text); opacity: .25;
+  animation: twinkle 4s ease-in-out infinite;
+}
+@keyframes twinkle {
+  0%, 100% { opacity: .12; transform: scale(1); }
+  50%      { opacity: .5;  transform: scale(1.6); }
+}
+
+.screen { display: none; position: relative; z-index: 1; }
+.screen.is-active { display: block; animation: fade .28s ease both; }
+@keyframes fade { from { opacity: 0; transform: translateY(8px); } }
+
+/* --- Шапка ------------------------------------------------------------- */
+
+.hero { text-align: center; padding: 28px 0 20px; }
+.hero__glyph {
+  font-size: 34px; line-height: 1;
+  background: linear-gradient(135deg, var(--accent), var(--link));
+  -webkit-background-clip: text; background-clip: text; color: transparent;
+  animation: float 4s ease-in-out infinite;
+}
+@keyframes float { 50% { transform: translateY(-6px); } }
+.hero__title { margin: 10px 0 4px; font-size: 25px; font-weight: 700; letter-spacing: -.3px; }
+.hero__subtitle { margin: 0; color: var(--muted); font-size: 14px; }
+
+.section-label {
+  margin: 22px 4px 10px; font-size: 12px; font-weight: 600;
+  letter-spacing: .8px; text-transform: uppercase; color: var(--muted);
+}
+
+/* --- Плитки тем -------------------------------------------------------- */
+
+.grid { display: grid; grid-template-columns: 1fr 1fr; gap: var(--gap); }
+
+.tile {
+  position: relative; overflow: hidden;
+  display: flex; flex-direction: column; gap: 6px;
+  padding: 16px 14px; min-height: 92px;
+  border: 0; border-radius: var(--radius-lg);
+  background: var(--surface); color: var(--text);
+  text-align: left; font: inherit; cursor: pointer;
+  box-shadow: var(--shadow);
+  transition: transform .16s ease, box-shadow .16s ease;
+}
+.tile:active { transform: scale(.96); box-shadow: none; }
+.tile::after {
+  content: ""; position: absolute; inset: 0;
+  background: radial-gradient(120% 90% at 100% 0%,
+              color-mix(in srgb, var(--accent) 26%, transparent), transparent 62%);
+  pointer-events: none;
+}
+.tile__emoji { font-size: 24px; line-height: 1; }
+.tile__title { font-size: 15px; font-weight: 600; }
+.tile__hint { font-size: 12px; color: var(--muted); }
+
+/* --- Инструменты ------------------------------------------------------- */
+
+.tools { display: flex; flex-direction: column; gap: 8px; }
+.tool {
+  display: flex; align-items: center; gap: 12px;
+  width: 100%; padding: 14px; border: 0;
+  border-radius: var(--radius); background: var(--surface); color: var(--text);
+  font: inherit; text-align: left; cursor: pointer;
+  transition: transform .16s ease;
+}
+.tool:active { transform: scale(.98); }
+.tool__icon {
+  flex: 0 0 38px; height: 38px; display: grid; place-items: center;
+  border-radius: 12px; font-size: 19px;
+  background: color-mix(in srgb, var(--accent) 18%, transparent);
+}
+.tool__title { font-size: 15px; font-weight: 600; }
+.tool__hint { font-size: 12px; color: var(--muted); }
+.tool__arrow { margin-left: auto; color: var(--muted); }
+
+/* --- Анкета ------------------------------------------------------------ */
+
+.back {
+  margin: 14px 0 6px; padding: 8px 0; border: 0; background: none;
+  color: var(--link); font: inherit; font-size: 15px; cursor: pointer;
+}
+
+.form-head { display: flex; align-items: center; gap: 12px; margin-bottom: 18px; }
+.form-head__emoji {
+  width: 46px; height: 46px; display: grid; place-items: center;
+  font-size: 24px; border-radius: 14px;
+  background: color-mix(in srgb, var(--accent) 20%, transparent);
+}
+.form-head__title { margin: 0; font-size: 20px; font-weight: 700; }
+
+.field { display: block; margin-bottom: 14px; }
+.field__label { display: block; margin-bottom: 6px; font-size: 13px; color: var(--muted); }
+.field__label b { color: var(--accent); }
+.field__input {
+  width: 100%; padding: 13px 14px;
+  border: 1.5px solid transparent; border-radius: var(--radius);
+  background: var(--surface); color: var(--text);
+  font: inherit; outline: none;
+  transition: border-color .16s ease;
+}
+.field__input--area { resize: none; }
+.field__input::placeholder { color: color-mix(in srgb, var(--muted) 70%, transparent); }
+.field__input:focus { border-color: var(--accent); }
+.field__input.is-error { border-color: #ff6b6b; }
+.field__hint { display: block; margin-top: 5px; font-size: 12px; color: var(--muted); }
+.field__hint.is-error { color: #ff6b6b; }
+
+.options { display: flex; flex-direction: column; gap: 6px; margin: -6px 0 14px; }
+.option {
+  padding: 11px 14px; border: 0; border-radius: 12px;
+  background: var(--surface); color: var(--text);
+  font: inherit; font-size: 14px; text-align: left; cursor: pointer;
+}
+.option:active { transform: scale(.98); }
+.option.is-chosen {
+  background: color-mix(in srgb, var(--accent) 26%, var(--surface));
+  font-weight: 600;
+}
+.option small { display: block; color: var(--muted); font-size: 12px; }
+
+.primary-button {
+  width: 100%; margin: 6px 0 4px; padding: 15px;
+  border: 0; border-radius: var(--radius);
+  background: var(--accent); color: var(--accent-text);
+  font: inherit; font-size: 16px; font-weight: 650; cursor: pointer;
+  box-shadow: 0 6px 18px color-mix(in srgb, var(--accent) 35%, transparent);
+  transition: transform .16s ease;
+}
+.primary-button:active { transform: scale(.98); }
+/* внутри Telegram есть системная MainButton — своя кнопка там лишняя */
+body.in-telegram .primary-button { display: none; }
+
+.privacy {
+  margin: 18px 0 8px; padding: 12px 14px; border-radius: var(--radius);
+  background: color-mix(in srgb, var(--accent) 10%, transparent);
+  color: var(--muted); font-size: 12.5px; line-height: 1.45;
+}
+
+/* --- Результат --------------------------------------------------------- */
+
+.card {
+  margin-bottom: 12px; padding: 16px;
+  border-radius: var(--radius-lg); background: var(--surface);
+  box-shadow: var(--shadow);
+  animation: rise .4s ease both;
+}
+.card:nth-child(2) { animation-delay: .05s; }
+.card:nth-child(3) { animation-delay: .1s; }
+.card:nth-child(4) { animation-delay: .15s; }
+.card:nth-child(5) { animation-delay: .2s; }
+@keyframes rise { from { opacity: 0; transform: translateY(14px); } }
+
+.card--note {
+  font-size: 12.5px;
+  line-height: 1.5;
+  color: var(--muted);
+  background: transparent;
+  border-style: dashed;
+}
+
+.card__title {
+  margin: 0 0 10px; font-size: 12px; font-weight: 700;
+  letter-spacing: .9px; text-transform: uppercase; color: var(--accent);
+}
+.card p { margin: 0 0 9px; }
+.card p:last-child { margin-bottom: 0; }
+.card b { font-weight: 650; }
+.card i { color: var(--muted); font-style: normal; font-size: 13.5px; }
+
+.card--hero { text-align: center; }
+.card--hero .card__emoji { font-size: 30px; }
+.card--hero h2 { margin: 6px 0 2px; font-size: 21px; }
+.card--hero .card__meta { color: var(--muted); font-size: 13px; }
+
+.result-actions { margin: 18px 0 6px; }
+.ghost-button {
+  width: 100%; padding: 14px; border: 1.5px solid var(--accent);
+  border-radius: var(--radius); background: none; color: var(--accent);
+  font: inherit; font-weight: 600; cursor: pointer;
+}
+.ghost-button:active { transform: scale(.98); }
+
+.footnote {
+  margin: 22px 4px 0; color: var(--muted); font-size: 12px; line-height: 1.45;
+  text-align: center;
+}
+
+/* --- Загрузка ---------------------------------------------------------- */
+
+.loader {
+  position: fixed; inset: 0; z-index: 10; display: none;
+  place-items: center; align-content: center; gap: 18px;
+  background: color-mix(in srgb, var(--bg) 92%, transparent);
+  backdrop-filter: blur(3px);
+}
+.loader.is-active { display: grid; }
+.loader__orbit {
+  width: 62px; height: 62px; display: grid; place-items: center;
+  border: 2px solid color-mix(in srgb, var(--accent) 30%, transparent);
+  border-top-color: var(--accent); border-radius: 50%;
+  animation: spin 1.1s linear infinite;
+}
+.loader__orbit span { font-size: 20px; animation: spin 1.1s linear infinite reverse; }
+@keyframes spin { to { transform: rotate(360deg); } }
+.loader__text { margin: 0; color: var(--muted); font-size: 14px; }
+
+.error-note {
+  margin: 14px 0; padding: 13px 14px; border-radius: var(--radius);
+  background: color-mix(in srgb, #ff6b6b 14%, transparent);
+  color: var(--text); font-size: 14px;
+}

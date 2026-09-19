@@ -1,0 +1,13 @@
+[Unit]
+Description=Сторож: проверяет, что бот на связи с Telegram
+After=network.target
+
+[Service]
+Type=oneshot
+ExecStart=/opt/tarot_astro_bot/deploy/watchdog.sh
+# Сторожу нужно перезапускать службу бота, поэтому он работает от root,
+# но с урезанными правами на файловую систему
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectHome=true
+ReadWritePaths=/var/lib

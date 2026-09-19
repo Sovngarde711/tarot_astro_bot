@@ -1,0 +1,102 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Звёздный потенциал</title>
+<script src="https://telegram.org/js/telegram-web-app.js"></script>
+<link rel="stylesheet" href="app.css">
+</head>
+<body>
+
+<div class="stars" id="stars"></div>
+
+<!-- Экран выбора темы -->
+<section class="screen is-active" id="screen-home">
+  <header class="hero">
+    <div class="hero__glyph">✦</div>
+    <h1 class="hero__title">Звёздный потенциал</h1>
+    <p class="hero__subtitle">Натальная карта и Таро — коротко и по делу</p>
+  </header>
+
+  <div class="section-label">О чём поговорим</div>
+  <div class="grid" id="spheres"></div>
+
+  <div class="section-label">Астрология</div>
+  <div class="tools" id="tools"></div>
+
+  <p class="footnote" id="footnote">
+    Астрология и Таро — символические системы, научных доказательств у них
+    нет. Это взгляд со стороны и повод подумать, а не медицинская,
+    юридическая, финансовая или психологическая помощь. Решение всегда
+    остаётся за вами.
+  </p>
+</section>
+
+<!-- Экран анкеты -->
+<section class="screen" id="screen-form">
+  <button class="back" data-back>← Назад</button>
+  <header class="form-head">
+    <div class="form-head__emoji" id="form-emoji">💞</div>
+    <h2 class="form-head__title" id="form-title">Любовь и отношения</h2>
+  </header>
+
+  <label class="field">
+    <span class="field__label">Как к вам обращаться</span>
+    <input class="field__input" id="input-name" type="text" maxlength="40"
+           placeholder="Необязательно" autocomplete="off">
+  </label>
+
+  <label class="field">
+    <span class="field__label">Дата рождения <b>*</b></span>
+    <input class="field__input" id="input-birth" type="text" inputmode="numeric"
+           placeholder="15.03.1990" autocomplete="off">
+    <span class="field__hint">Обязательно — без неё нет астрологии</span>
+  </label>
+
+  <label class="field">
+    <span class="field__label">Время рождения</span>
+    <input class="field__input" id="input-time" type="text" inputmode="numeric"
+           placeholder="14:30" autocomplete="off">
+    <span class="field__hint">С ним появятся дома и Асцендент</span>
+  </label>
+
+  <label class="field">
+    <span class="field__label">Город рождения</span>
+    <input class="field__input" id="input-city" type="text" maxlength="60"
+           placeholder="Москва" autocomplete="off">
+    <span class="field__hint" id="city-hint">Нужен для координат и часового пояса</span>
+  </label>
+  <div class="options" id="city-options"></div>
+
+  <label class="field">
+    <span class="field__label">Что именно вас волнует</span>
+    <textarea class="field__input field__input--area" id="input-question"
+              maxlength="200" rows="2" placeholder="Необязательно"></textarea>
+  </label>
+
+  <button class="primary-button" id="btn-submit">Получить разбор</button>
+
+  <div class="privacy">
+    🔒 Данные держим только в памяти: исчезают при перезапуске и по вашей команде.
+  </div>
+</section>
+
+<!-- Экран результата -->
+<section class="screen" id="screen-result">
+  <button class="back" data-back>← К темам</button>
+  <div id="result"></div>
+  <div class="result-actions">
+    <button class="ghost-button" id="btn-again">Другая тема</button>
+  </div>
+</section>
+
+<!-- Загрузка -->
+<div class="loader" id="loader">
+  <div class="loader__orbit"><span>✦</span></div>
+  <p class="loader__text" id="loader-text">Считаю карту…</p>
+</div>
+
+<script src="app.js"></script>
+</body>
+</html>

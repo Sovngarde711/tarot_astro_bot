@@ -1,0 +1,49 @@
+[Unit]
+Description=Tarot & Astrology Telegram Bot
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+WorkingDirectory=__PROJECT_DIR__
+EnvironmentFile=__PROJECT_DIR__/.env
+ExecStart=__PROJECT_DIR__/venv/bin/python __PROJECT_DIR__/bot/bot.py
+Restart=always
+RestartSec=5
+
+# Боту не нужны привилегии: он читает свои файлы и ходит наружу по HTTPS.
+# Под root любая уязвимость в нём или в его зависимостях (torch,
+# transformers, chromadb — сотни транзитивных пакетов) означала бы root
+# на всём сервере.
+User=tarotbot
+Group=tarotbot
+
+# Кеш моделей Hugging Face держим внутри проекта: домашнего каталога у
+# системного пользователя нет, а ProtectHome его всё равно закрывает.
+Environment=HF_HOME=__PROJECT_DIR__/.cache/huggingface
+
+# Ограничение прав
+NoNewPrivileges=true
+PrivateTmp=true
+PrivateDevices=true
+ProtectSystem=strict
+ProtectHome=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+RestrictSUIDSGID=true
+RestrictRealtime=true
+LockPersonality=true
+RestrictAddressFamilies=AF_INET AF_INET6
+# Куда бот пишет: векторная база (SQLite ChromaDB), кеш модели, обезличенная
+# статистика и анкеты клиентов. Папку store создайте заранее с правами 700 на
+# пользователя бота: в ней лежат персональные данные, и читать её посторонним
+# незачем.
+ReadWritePaths=__PROJECT_DIR__/vectorstore __PROJECT_DIR__/.cache __PROJECT_DIR__/stats __PROJECT_DIR__/store
+
+# Ресурсы: расклад считается за сотые доли секунды, столько с запасом хватает
+MemoryMax=2G
+TasksMax=64
+
+[Install]
+WantedBy=multi-user.target

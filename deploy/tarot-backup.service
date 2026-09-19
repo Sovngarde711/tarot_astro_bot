@@ -1,0 +1,16 @@
+[Unit]
+Description=Бэкап данных бота (анкеты, счётчики, история, статистика)
+After=network.target
+
+[Service]
+Type=oneshot
+ExecStart=/opt/tarot_astro_bot/deploy/backup.sh
+# Скрипт трогает только свой каталог бэкапов и читает данные проекта
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+# Каталог бэкапов создаёт сам скрипт, поэтому разрешаем запись в
+# родительский: systemd готовит окружение до запуска, и указание на
+# ещё не созданный каталог роняет службу с ошибкой namespacing
+ReadWritePaths=/var/backups
+ProtectHome=true

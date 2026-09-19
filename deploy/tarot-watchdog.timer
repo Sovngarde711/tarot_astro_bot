@@ -1,0 +1,9 @@
+[Unit]
+Description=Проверка связи бота с Telegram каждые пять минут
+
+[Timer]
+OnBootSec=3min
+OnUnitActiveSec=5min
+
+[Install]
+WantedBy=timers.target

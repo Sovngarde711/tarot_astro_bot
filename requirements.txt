@@ -1,0 +1,7 @@
+requests>=2.31
+python-dotenv>=1.0
+sentence-transformers>=6.0
+chromadb>=1.5
+pyswisseph>=2.10
+geonamescache>=2.0
+tzdata>=2024.1; platform_system == "Windows"

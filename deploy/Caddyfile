@@ -1,0 +1,59 @@
+# Обратный прокси для мини-приложения Telegram.
+#
+# Зачем он нужен. Telegram открывает мини-приложение только по HTTPS и
+# только с сертификатом настоящего центра сертификации: ни http://, ни
+# самоподписанный сертификат он не примет. Caddy получает сертификат
+# Let's Encrypt сам, при первом запуске, и сам его продлевает — ничего
+# настраивать и помнить не нужно.
+#
+# Как поставить (Ubuntu 22.04):
+#
+#   sudo apt install -y debian-keyring debian-archive-keyring apt-transport-https curl
+#   curl -1sLf 'https://dl.cloudsmith.io/public/caddy/stable/gpg.key' \
+#     | sudo gpg --dearmor -o /usr/share/keyrings/caddy-stable-archive-keyring.gpg
+#   curl -1sLf 'https://dl.cloudsmith.io/public/caddy/stable/debian.deb.txt' \
+#     | sudo tee /etc/apt/sources.list.d/caddy-stable.list
+#   sudo apt update && sudo apt install -y caddy
+#
+# Затем скопировать этот файл, заменив адрес на свой:
+#
+#   sudo cp deploy/Caddyfile /etc/caddy/Caddyfile
+#   sudo nano /etc/caddy/Caddyfile        # заменить app.example.com
+#   sudo systemctl reload caddy
+#
+# Перед этим A-запись домена должна уже указывать на IP сервера, иначе
+# Let's Encrypt не сможет подтвердить владение и сертификата не будет.
+
+app.example.com {
+	# Мини-приложение слушает только петлевой адрес (см. WEBAPP_HOST в
+	# .env.example): наружу оно смотрит исключительно через эту строку,
+	# то есть всегда по HTTPS.
+	reverse_proxy 127.0.0.1:8080
+
+	# Telegram открывает приложение во встроенном браузере и довольно
+	# цепко держит статику в кеше. Без этого заголовка часть людей после
+	# обновления ещё сутки видит старую версию.
+	header /*.js Cache-Control "no-cache"
+	header /*.css Cache-Control "no-cache"
+
+	# Встраивать приложение в рамку можно только Telegram. SAMEORIGIN,
+	# стоявший здесь раньше, разрешал рамку лишь на нашем же домене — то
+	# есть закрыл бы приложение в веб-версии Telegram, которая открывает
+	# его с web.telegram.org. Заголовок ставит и сам сервер приложения;
+	# здесь он продублирован на случай, если наружу будет смотреть что-то
+	# ещё — статика, страница ошибки.
+	header Content-Security-Policy "frame-ancestors https://telegram.org https://*.telegram.org"
+
+	# Год HTTPS без возможности откатиться на http: без этого первое
+	# обращение по http можно перехватить и увести на чужую страницу.
+	header Strict-Transport-Security "max-age=31536000"
+
+	encode gzip
+	log {
+		# Пишем в системный журнал, а не в отдельный файл: Caddy работает от
+		# своего пользователя и прав на /var/log/caddy у него нет, а плодить
+		# ещё одно место хранения IP-адресов посетителей не нужно. Срок
+		# хранения задаётся один раз для всего журнала (см. DEPLOY.md).
+		output stderr
+	}
+}
