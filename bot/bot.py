@@ -37,6 +37,7 @@ import billing  # noqa: E402
 import forecast  # noqa: E402
 import natal  # noqa: E402
 import payments  # noqa: E402
+import privacy  # noqa: E402
 import periods  # noqa: E402
 import readings  # noqa: E402
 import stats  # noqa: E402
@@ -265,13 +266,27 @@ OFFER_TEXT = (
     "<b>8. Ваши данные.</b> Храню имя, дату, время и место рождения — "
     "только чтобы не спрашивать их заново. Вопросы и тексты разборов на "
     "диск не попадают. Удалить всё разом: /reset. Счётчик разборов "
-    "остаётся: иначе бесплатный лимит обходился бы одной командой.\n\n"
+    "остаётся: иначе бесплатный лимит обходился бы одной командой. "
+    "Подробно — /privacy.\n\n"
 
     "<b>9. Изменения.</b> Условия могут меняться; к уже оплаченным "
     "разборам применяются те, что действовали в день оплаты.\n\n"
 
     "<i>Нажимая кнопку оплаты, вы соглашаетесь с этими условиями.</i>"
 )
+
+
+def privacy_messages():
+    """Политика обработки данных с настоящими сроками хранения."""
+    return privacy.policy(SELLER, SELLER_CONTACT,
+                          retention_days=store.RETENTION_DAYS,
+                          max_people=store.MAX_PEOPLE)
+
+
+def deliver_privacy(chat_id):
+    """Политика не помещается в одно сообщение — отправляем частями."""
+    for part in privacy_messages():
+        send_message(chat_id, part)
 
 
 def offer_text():
@@ -1502,6 +1517,9 @@ def handle_message(chat_id, text, retriever):
         if command in ("terms", "offer"):
             send_message(chat_id, offer_text(), menu_keyboard())
             return
+        if command in ("privacy", "data"):
+            deliver_privacy(chat_id)
+            return
         if command == "refund":
             deliver_refund(chat_id, text)
             return
@@ -1649,6 +1667,7 @@ def main():
         {"command": "random", "description": "Карта дня"},
         {"command": "about", "description": "О методе"},
         {"command": "people", "description": "Кого я помню"},
+        {"command": "privacy", "description": "Что я храню и как это удалить"},
     ] + ([
         # Пока разборы бесплатны, предлагать их купить незачем: команда
         # работает, но в меню не мозолит глаза

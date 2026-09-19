@@ -224,6 +224,40 @@ check("возврат в оферте есть и в коде", "refundStarPayme
 check("оферта не обещает того, чего бот не делает: срок хранения оплат",
       "не имеют срока" in terms and "не сгорают" in terms)
 
+print("\n=== 12. Политика обработки данных ===")
+import store  # noqa: E402
+
+parts = B.privacy_messages()
+check("политика разбита на сообщения Telegram",
+      parts and all(len(p) < 4096 for p in parts),
+      "частей %d, длины %s" % (len(parts), [len(p) for p in parts]))
+
+whole = "\n".join(parts)
+check("назван закон", "152-ФЗ" in whole)
+check("назван оператор и контакт", B.SELLER_CONTACT in whole)
+check("указано правовое основание", "ст. 6" in whole)
+check("названы цели", "Зачем" in whole)
+check("срок хранения совпадает с настоящим",
+      "%d дней" % store.RETENTION_DAYS in whole,
+      "в коде %d" % store.RETENTION_DAYS)
+check("число анкет совпадает с настоящим",
+      "%d анкет" % store.MAX_PEOPLE in whole,
+      "в коде %d" % store.MAX_PEOPLE)
+check("сказано про удаление и отзыв согласия",
+      "/reset" in whole and "отозвать согласие" in whole)
+check("сказано про право узнать свои данные", "/people" in whole)
+check("сказано про трансграничную передачу", "трансгранич" in whole)
+check("сказано про данные третьих лиц", "других людей" in whole.lower()
+      or "Данные других людей" in whole)
+check("политика открывается командой", '"privacy"' in source)
+check("оферта ссылается на политику", "/privacy" in B.offer_text())
+
+# Политика не должна обещать того, чего нет: бот действительно не пишет
+# вопросы и тексты разборов на диск
+check("обещание не хранить вопросы совпадает с кодом",
+      "тексты разборов на диск не записываются" in whole
+      and "вопрос" not in str(store.SAVED_FIELDS))
+
 print("\n=== ИТОГ ===")
 print("Не прошло проверок: %d" % len(FAILS))
 for item in FAILS:
