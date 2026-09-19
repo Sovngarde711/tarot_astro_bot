@@ -36,6 +36,7 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "data"))
 import billing  # noqa: E402
 import forecast  # noqa: E402
 import natal  # noqa: E402
+import payments  # noqa: E402
 import periods  # noqa: E402
 import readings  # noqa: E402
 import stats  # noqa: E402
@@ -192,8 +193,32 @@ PAYWALL_TEXT = (
     "• /random — карта дня\n"
     "• вопрос словами («Башня перевёрнутая», «Марс в Овне») — отвечу из "
     "справочника\n\n"
-    "<i>Оплата пока не подключена. Как только появится — здесь будет "
-    "кнопка.</i>"
+    "Разбор можно купить за звёзды Telegram — кнопка ниже. Звёзды "
+    "покупаются прямо в Telegram, реквизиты карты я не вижу и не храню."
+)
+
+
+def buy_keyboard():
+    """Кнопки наборов: сначала поштучно, потом со скидкой."""
+    rows = []
+    for count, stars, discount in payments.packs():
+        label = "⭐ %d — %s" % (stars, payments.title_for(count))
+        if discount:
+            label += " (−%d%%)" % discount
+        rows.append([(label, "buy:%d" % count)])
+    rows.append([("Назад", "act:menu")])
+    return keyboard(rows)
+
+
+BUY_TEXT = (
+    "⭐ <b>Разборы за звёзды Telegram</b>\n\n"
+    "Звёзды — внутренняя валюта Telegram: они покупаются в самом "
+    "приложении, а я вижу только факт оплаты. Реквизиты карты ко мне не "
+    "попадают.\n\n"
+    "Оплаченные разборы не сгорают: берите их когда захотите и по любым "
+    "темам.\n\n"
+    "<i>Если разбор не пришёл или пришёл не тот — напишите мне, верну "
+    "звёзды.</i>"
 )
 
 # Оговорка про счётчик. Показывается только при включённой платной модели:
@@ -665,7 +690,7 @@ def start_sphere(chat_id, sphere_key):
     if not billing.can_read(chat_id):
         stats.track("paywall_hit", chat_id, sphere=sphere_key)
         log.info("Чат %s исчерпал бесплатные разборы", chat_id)
-        send_message(chat_id, PAYWALL_TEXT, menu_keyboard())
+        send_message(chat_id, PAYWALL_TEXT, buy_keyboard())
         return
 
     sphere = readings.SPHERES[sphere_key]
@@ -868,6 +893,7 @@ def deliver_stats(chat_id, text):
                  % (totals["chats"], totals["readings"], totals["over_free"],
                     totals["paid_left"],
                     "включена" if billing.ENABLED else "выключена"))
+        money += recent_payments_block()
         send_message(chat_id, stats.format_report(
             report, "Статистика за %d дн." % days) + money)
     except Exception:
@@ -1053,6 +1079,152 @@ def handle_dialog_step(chat_id, text, retriever):
         ask_name(chat_id, dialog["sphere"])
 
 
+# ---------------------------------------------------------------------------
+# Оплата звёздами Telegram
+# ---------------------------------------------------------------------------
+
+def recent_payments_block(limit=5):
+    """Последние оплаты с номерами — их спрашивает команда возврата."""
+    found = []
+    for chat, record in billing.load_all().items():
+        for payment in (record.get("payments") or []):
+            found.append((payment.get("date") or "", chat, payment))
+    if not found:
+        return ""
+
+    found.sort(reverse=True)
+    lines = ["\n\n⭐ <b>Последние оплаты</b>"]
+    for date, chat, payment in found[:limit]:
+        lines.append("%s · чат %s · %s ⭐ за %s разб. · <code>%s</code>%s"
+                     % (date, chat, payment.get("stars"),
+                        payment.get("count"), payment.get("id"),
+                        " · возвращено" if payment.get("refunded") else ""))
+    lines.append("<i>Вернуть: /refund НОМЕР</i>")
+    return "\n".join(lines)
+
+
+def offer_purchase(chat_id):
+    """Показывает наборы разборов и их цену."""
+    stats.track("buy_opened", chat_id)
+    send_message(chat_id, BUY_TEXT, buy_keyboard())
+
+
+def send_invoice(chat_id, count):
+    """Выставляет счёт на набор из count разборов."""
+    order = payments.invoice(count)
+    if not order:
+        log.warning("запрошен набор %r, которого нет", count)
+        send_message(chat_id, "Такого набора нет — выберите из списка: /buy")
+        return
+    result = api_call("sendInvoice", chat_id=chat_id, **order)
+    if result is None or not result.get("ok"):
+        reason = (result or {}).get("description") or "нет связи с Telegram"
+        log.warning("счёт на %d разборов не ушёл: %s", count, reason)
+        send_message(chat_id, "Не смог выставить счёт. Попробуйте через "
+                              "минуту или напишите мне, если повторится.")
+        return
+    stats.track("invoice_sent", chat_id, count=count,
+                stars=order["prices"][0]["amount"])
+
+
+def handle_pre_checkout(query):
+    """Последняя проверка перед тем, как Telegram спишет звёзды.
+
+    Ответить нужно за десять секунд, иначе платёж отменяется. Поэтому
+    здесь только сверка, что счёт наш, — ничего долгого.
+    """
+    count = payments.count_from_payload(query.get("invoice_payload"))
+    params = {"pre_checkout_query_id": query["id"], "ok": count is not None}
+    if count is None:
+        log.warning("незнакомый счёт в pre_checkout: %r",
+                    query.get("invoice_payload"))
+        params["error_message"] = ("Этот счёт устарел. Откройте /buy и "
+                                   "выберите набор заново.")
+    api_call("answerPreCheckoutQuery", **params)
+
+
+def handle_successful_payment(chat_id, paid):
+    """Звёзды списаны — начисляем оплаченные разборы."""
+    charge_id = paid.get("telegram_payment_charge_id")
+    stars = paid.get("total_amount") or 0
+    count = payments.granted_count(paid.get("invoice_payload"), stars)
+
+    if not count:
+        # Деньги списаны, а понять, за что, не получается. Молчать здесь
+        # нельзя: человек заплатил и вправе знать, что делать дальше
+        log.error("оплата %s на %s звёзд не разобрана: payload=%r",
+                  charge_id, stars, paid.get("invoice_payload"))
+        send_message(chat_id, with_note(
+            "Оплата прошла, но я не смог разобрать, за какой набор. "
+            "Напишите мне — разберусь вручную и либо начислю разборы, "
+            "либо верну звёзды."))
+        return
+
+    if not billing.pay(chat_id, charge_id, count, stars):
+        # Либо это повтор того же платежа (Telegram шлёт подтверждение,
+        # пока бот его не примет), либо счётчики не записались. Первое —
+        # норма и человеку сообщать не о чем, второе — беда, о которой
+        # он узнает при первом же разборе
+        log.warning("платёж %s не начислен (повтор или сбой записи)",
+                    charge_id)
+        return
+
+    stats.track("payment", chat_id, count=count, stars=stars)
+    log.info("чат %s оплатил %d разборов за %s звёзд", chat_id, count, stars)
+    left = billing.state(chat_id)["paid"]
+    send_message(chat_id, with_note(
+        "⭐ <b>Спасибо, оплата прошла.</b>\n\n"
+        "Начислено разборов: %d. Всего доступно: %d.\n\n"
+        "Выбирайте тему — и поехали." % (count, left)), menu_keyboard())
+
+
+def deliver_refund(chat_id, text):
+    """Возврат звёзд по номеру платежа. Только для владельца.
+
+    Возвращать умеет сам Telegram, но команду должен отдать бот. Делать
+    это по кнопке у клиента нельзя: тогда разбор можно получить и тут же
+    забрать деньги. Поэтому возврат — ручное решение владельца.
+    """
+    if not is_admin(chat_id):
+        send_message(chat_id, "Эта команда не для общего пользования. "
+                              "Если нужен возврат — напишите мне словами.")
+        return
+
+    parts = text.split()
+    if len(parts) < 2:
+        send_message(chat_id,
+                     "Как пользоваться: <code>/refund НОМЕР_ПЛАТЕЖА</code>\n\n"
+                     "Номер приходит в подтверждении оплаты и хранится в "
+                     "учёте. Посмотреть последние: /stats")
+        return
+
+    charge_id = parts[1]
+    owner, payment = billing.find_payment(charge_id)
+    if not owner:
+        send_message(chat_id, "Такого платежа в учёте нет. Проверьте номер.")
+        return
+    if payment.get("refunded"):
+        send_message(chat_id, "Этот платёж уже возвращён %s."
+                     % payment["refunded"])
+        return
+
+    result = api_call("refundStarPayment", user_id=int(owner),
+                      telegram_payment_charge_id=charge_id)
+    if result is None or not result.get("ok"):
+        reason = (result or {}).get("description") or "нет связи с Telegram"
+        send_message(chat_id, "Telegram отказал в возврате: %s"
+                     % html.escape(str(reason)))
+        return
+
+    billing.mark_refunded(owner, charge_id)
+    stats.track("refund", chat_id, stars=payment.get("stars"))
+    send_message(chat_id, "Возвращено: %s звёзд чату %s."
+                 % (payment.get("stars"), owner))
+    send_message(int(owner), with_note(
+        "Звёзды за этот разбор вернулись на ваш счёт в Telegram. "
+        "Если захотите попробовать снова — я на месте."))
+
+
 def handle_callback(callback, retriever):
     chat_id = callback["message"]["chat"]["id"]
     # callback_data формируем мы сами, но клиент может прислать любую
@@ -1062,6 +1234,15 @@ def handle_callback(callback, retriever):
 
     if rate_limited(chat_id):
         log.info("Чат %s превысил лимит нажатий", chat_id)
+        return
+
+    if data.startswith("buy:"):
+        try:
+            count = int(data.split(":", 1)[1])
+        except ValueError:
+            offer_purchase(chat_id)
+            return
+        send_invoice(chat_id, count)
         return
 
     if data.startswith("sph:"):
@@ -1255,6 +1436,12 @@ def handle_message(chat_id, text, retriever):
         if command == "stats":
             deliver_stats(chat_id, text)
             return
+        if command in ("buy", "pay"):
+            offer_purchase(chat_id)
+            return
+        if command == "refund":
+            deliver_refund(chat_id, text)
+            return
         if command in ("week", "nedelya"):
             deliver_period(chat_id, "week")
             return
@@ -1399,6 +1586,11 @@ def main():
         {"command": "random", "description": "Карта дня"},
         {"command": "about", "description": "О методе"},
         {"command": "people", "description": "Кого я помню"},
+    ] + ([
+        # Пока разборы бесплатны, предлагать их купить незачем: команда
+        # работает, но в меню не мозолит глаза
+        {"command": "buy", "description": "Купить разборы за звёзды"},
+    ] if billing.ENABLED else []) + [
         {"command": "reset", "description": "Удалить мои данные"},
         {"command": "help", "description": "Справка"},
     ])
@@ -1407,7 +1599,11 @@ def main():
     log.info("Начинаю long polling...")
     while True:
         try:
-            params = dict(timeout=30, allowed_updates=["message", "callback_query"])
+            # pre_checkout_query нужен обязательно: не ответив на него за
+            # десять секунд, бот отменяет оплату. Без этой строки Telegram
+            # такие обновления просто не присылает, и платежи не проходят
+            params = dict(timeout=30, allowed_updates=[
+                "message", "callback_query", "pre_checkout_query"])
             if offset is not None:
                 params["offset"] = offset
             resp = api_call("getUpdates", **params)
@@ -1422,8 +1618,25 @@ def main():
                     except Exception:
                         log.exception("Ошибка при обработке кнопки")
                     continue
+                if "pre_checkout_query" in update:
+                    try:
+                        handle_pre_checkout(update["pre_checkout_query"])
+                    except Exception:
+                        log.exception("Ошибка перед списанием звёзд")
+                    continue
                 message = update.get("message")
-                if not message or "text" not in message:
+                if not message:
+                    continue
+                # Подтверждение оплаты приходит сообщением без текста —
+                # до проверки на текст, иначе оплата потеряется молча
+                if "successful_payment" in message:
+                    try:
+                        handle_successful_payment(message["chat"]["id"],
+                                                  message["successful_payment"])
+                    except Exception:
+                        log.exception("Ошибка при зачислении оплаты")
+                    continue
+                if "text" not in message:
                     continue
                 chat_id = message["chat"]["id"]
                 try:

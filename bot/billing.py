@@ -113,11 +113,15 @@ def _write_all(data):
 
 def _record(data, chat_id):
     record = data.get(str(chat_id)) or {}
+    payments = record.get("payments")
     return {
         "used": int(record.get("used") or 0),
         "paid": int(record.get("paid") or 0),
         "first": record.get("first") or "",
         "last": record.get("last") or "",
+        # Номера оплат: без них звёзды нельзя вернуть, а вернуть их
+        # Telegram требует уметь
+        "payments": list(payments) if isinstance(payments, list) else [],
     }
 
 
@@ -177,6 +181,77 @@ def charge(chat_id):
         if not _write_all(data):
             return None
         return kind
+
+
+def pay(chat_id, charge_id, count, stars):
+    """Начисляет разборы за оплату звёздами. Возвращает True, если начислил.
+
+    Повторный платёж с тем же номером не начисляется ничего. Это не
+    перестраховка: Telegram повторяет подтверждение, пока бот не примет
+    обновление, и при неудачном перезапуске человек получил бы вдвое
+    больше оплаченного — а заметили бы мы это по расходящимся деньгам.
+    """
+    if not charge_id or count <= 0:
+        return False
+    with _lock:
+        data = load_all()
+        chat = str(chat_id)
+        record = _record(data, chat_id)
+        if any(item.get("id") == charge_id for item in record["payments"]):
+            log.info("платёж %s уже начислен, пропускаю", charge_id)
+            return False
+
+        record["paid"] += int(count)
+        record["first"] = record["first"] or _today()
+        record["payments"].append({
+            "id": charge_id,
+            "count": int(count),
+            "stars": int(stars),
+            "date": _today(),
+        })
+        # Храним последние полсотни: этого с запасом хватает на возвраты,
+        # а файл не растёт без предела у постоянных клиентов
+        record["payments"] = record["payments"][-50:]
+        data[chat] = record
+        return _write_all(data)
+
+
+def payments(chat_id):
+    """Оплаты этого чата, свежие в конце."""
+    return state(chat_id)["payments"]
+
+
+def find_payment(charge_id):
+    """Ищет оплату по номеру: (номер чата, запись) или (None, None)."""
+    for chat, record in load_all().items():
+        for item in (record.get("payments") or []):
+            if item.get("id") == charge_id:
+                return chat, item
+    return None, None
+
+
+def mark_refunded(chat_id, charge_id):
+    """Отмечает возврат: снимает неиспользованные разборы и помечает оплату.
+
+    Если человек уже потратил оплаченное, отнимать нечего — уводить
+    счётчик в минус нельзя, иначе он потом получит разборы, за которые
+    никто не платил.
+    """
+    with _lock:
+        data = load_all()
+        chat = str(chat_id)
+        record = _record(data, chat_id)
+        found = None
+        for item in record["payments"]:
+            if item.get("id") == charge_id:
+                found = item
+                break
+        if found is None or found.get("refunded"):
+            return False
+        found["refunded"] = _today()
+        record["paid"] = max(0, record["paid"] - int(found.get("count") or 0))
+        data[chat] = record
+        return _write_all(data)
 
 
 def grant(chat_id, count=1):
