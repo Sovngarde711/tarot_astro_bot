@@ -1179,13 +1179,31 @@ def recent_payments_block(limit=5):
 
 
 def offer_purchase(chat_id):
-    """Показывает наборы разборов и их цену."""
+    """Показывает наборы разборов и их цену.
+
+    Пока платная модель выключена, продавать нечего: разборы и так
+    бесплатны, и взять за них деньги значило бы продать воздух, а потом
+    возвращать. Владельцу покупка остаётся доступной — иначе цепочку
+    оплаты не проверить.
+    """
+    if not billing.ENABLED and not is_admin(chat_id):
+        send_message(chat_id, "Сейчас все разборы бесплатны — платить не "
+                              "нужно. Выбирайте тему: /menu")
+        return
     stats.track("buy_opened", chat_id)
     send_message(chat_id, BUY_TEXT, buy_keyboard())
 
 
 def send_invoice(chat_id, count):
     """Выставляет счёт на набор из count разборов."""
+    if not billing.ENABLED and not is_admin(chat_id):
+        # Кнопка покупки могла остаться в старом сообщении: Telegram
+        # хранит их вечно, и нажать её можно через месяц после того, как
+        # оплату выключили
+        log.info("счёт не выставлен: платная модель выключена")
+        send_message(chat_id, "Сейчас все разборы бесплатны — платить не "
+                              "нужно. Выбирайте тему: /menu")
+        return
     order = payments.invoice(count)
     if not order:
         log.warning("запрошен набор %r, которого нет", count)

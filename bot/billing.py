@@ -166,7 +166,13 @@ def charge(chat_id):
         chat = str(chat_id)
         record = _record(data, chat_id)
 
-        if record["used"] < FREE_READINGS:
+        if not ENABLED:
+            # Платная модель выключена — разборы бесплатны для всех, и
+            # тратить чей-то оплаченный запас в это время нельзя: человек
+            # заплатил за то, что сейчас раздаётся даром. Расход всё равно
+            # считаем, иначе пропадёт статистика.
+            kind = "free"
+        elif record["used"] < FREE_READINGS:
             kind = "free"
         elif record["paid"] > 0:
             record["paid"] -= 1

@@ -92,6 +92,17 @@ check("сумма совпадает с ценой набора",
       order["prices"][0]["amount"] == payments.stars_for(5))
 check("в счёте один пункт", len(order["prices"]) == 1)
 
+# Пока платная модель выключена, разборы бесплатны — брать за них деньги
+# значит продать то, что и так раздаётся, а потом возвращать
+billing.ENABLED = False
+CALLS.clear()
+B.send_invoice(555, 5)
+check("при выключенной оплате счёт не выставляется",
+      last("sendInvoice") is None)
+check("человеку объяснили, почему",
+      any("бесплатны" in (p.get("text") or "") for _, p in CALLS))
+
+billing.ENABLED = True
 CALLS.clear()
 B.send_invoice(555, 5)
 sent = last("sendInvoice")
@@ -169,6 +180,22 @@ check("первый разбор бесплатный, дальше платны
       str(kinds))
 check("из запаса ушло ровно два", after["paid"] == before - 2,
       "было %d, стало %d" % (before, after["paid"]))
+
+# Владелец может временно сделать бота бесплатным. Пока так, оплаченный
+# запас трогать нельзя: человек заплатил за то, что сейчас раздаётся даром
+billing.ENABLED = False
+paid_before = billing.state(555)["paid"]
+used_before = billing.state(555)["used"]
+kinds = [billing.charge(555) for _ in range(3)]
+paid_after = billing.state(555)
+check("при выключенной оплате запас не тратится",
+      paid_after["paid"] == paid_before,
+      "было %d, стало %d" % (paid_before, paid_after["paid"]))
+check("расход при этом всё равно считается",
+      paid_after["used"] == used_before + 3)
+check("разборы помечены бесплатными", all(k == "free" for k in kinds),
+      str(kinds))
+billing.ENABLED = True
 
 print("\n=== 9. Возврат ===")
 CALLS.clear()
