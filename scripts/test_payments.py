@@ -238,7 +238,14 @@ check("цена в оферте совпадает с настоящей",
       ("%d ⭐" % payments.PRICE) in terms)
 check("сказано, что это цифровая услуга", "цифровая услуга" in terms)
 check("обещан возврат неиспользованного", "Неиспользованные" in terms)
-check("указан контакт для обращений", B.SELLER_CONTACT in terms)
+# Проверяем именно то, что увидит человек: пустая настройка дала бы
+# пустую строку, которая «находится» в любом тексте
+check("указан контакт для обращений", B.contact() in terms,
+      B.contact())
+privacy_src = io.open(os.path.join(PROJECT, "bot", "privacy.py"),
+                      encoding="utf-8").read()
+check("личный контакт не зашит в код",
+      "stasia" not in source and "stasia" not in privacy_src)
 check("сказано, чем разбор не является",
       "не медицинская" in terms and "не юридическая" in terms)
 check("сбываемость не обещана", "сбываемость" in terms)
@@ -261,7 +268,7 @@ check("политика разбита на сообщения Telegram",
 
 whole = "\n".join(parts)
 check("назван закон", "152-ФЗ" in whole)
-check("назван оператор и контакт", B.SELLER_CONTACT in whole)
+check("назван оператор и контакт", B.contact() in whole)
 check("указано правовое основание", "ст. 6" in whole)
 check("названы цели", "Зачем" in whole)
 check("срок хранения совпадает с настоящим",

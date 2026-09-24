@@ -227,7 +227,18 @@ BUY_TEXT = (
 # нет, оферта говорит только то, что заведомо правда: услугу оказывает
 # владелец бота, вот контакт для обращений.
 SELLER = (os.environ.get("SELLER_NAME") or "").strip()
-SELLER_CONTACT = (os.environ.get("SELLER_CONTACT") or "@stasia_77").strip()
+SELLER_CONTACT = (os.environ.get("SELLER_CONTACT") or "").strip()
+
+
+def contact():
+    """Куда писать по вопросам оплаты и данных.
+
+    Ник владельца в коде не зашит: код уезжает в репозиторий и людям,
+    а личный контакт — не то, что стоит хранить там же, где логика бота.
+    Пока контакт не задан в настройках, зовём писать прямо боту: это
+    честно — сообщения всё равно приходят владельцу.
+    """
+    return SELLER_CONTACT or "прямо в этот чат"
 
 OFFER_TEXT = (
     "📄 <b>Условия оплаты и возврата</b>\n\n"
@@ -278,7 +289,7 @@ OFFER_TEXT = (
 
 def privacy_messages():
     """Политика обработки данных с настоящими сроками хранения."""
-    return privacy.policy(SELLER, SELLER_CONTACT,
+    return privacy.policy(SELLER, contact(),
                           retention_days=store.RETENTION_DAYS,
                           max_people=store.MAX_PEOPLE)
 
@@ -294,7 +305,7 @@ def offer_text():
     who = ("Услугу оказывает %s, владелец бота @Star_potential_bot."
            % SELLER) if SELLER else \
           "Услугу оказывает владелец бота @Star_potential_bot."
-    return OFFER_TEXT % (who, SELLER_CONTACT, payments.PRICE, SELLER_CONTACT)
+    return OFFER_TEXT % (who, contact(), payments.PRICE, contact())
 
 # Оговорка про счётчик. Показывается только при включённой платной модели:
 # пока разборы бесплатны, объяснять нечего.
